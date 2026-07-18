@@ -139,9 +139,4 @@ def main() -> None:
               f"{rnd['n_within_budget']}/{RANDOM_N} trials fit budget)")
     else:
         print(f"  random: NONE of {RANDOM_N} trials fit the budget")
-    print(f"\n  wrote {OUT_PATH}  (wall {out['wall_s']}s)")
-    print("  The LLM search (Stage 6) must beat 'random best (<=budget)' to justify itself.")
-
-
-if __name__ == "__main__":
-    main()
+    print(f"\n  wrote {OUT_PATH}  (wall {out['wall_s'
