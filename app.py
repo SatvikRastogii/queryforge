@@ -364,14 +364,4 @@ def custom_run(queries: str = Form(...)):
         "best_ms": final["best_ms"],
         "percent_faster": round((1 - final["best_ms"] / final["baseline_ms"]) * 100, 1),
         "best_config": final["best_config"],
-        "generations_run": final["generation"],
-        "base_pq": base_entry["per_query_ms"] if base_entry else {},
-        "best_pq": best_entry["per_query_ms"] if best_entry else {},
-        "queries_by_id": workload,
-    }
-    _CUSTOM_CACHE[key] = result
-    return _custom_result_page(result, cached=False)
-
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=7860)
+        "generations_ru
