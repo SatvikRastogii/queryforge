@@ -1,0 +1,13 @@
+psycopg[binary]
+langgraph
+pydantic
+groq
+langfuse
+fastapi
+python-multipart
+uvicorn
+mcp
+pandas
+matplotlib
+duckdb
+python-dotenv

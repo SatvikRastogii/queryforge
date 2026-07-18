@@ -1,0 +1,17 @@
+.env
+venv/
+__pycache__/
+*.pyc
+data/
+.claude/settings.local.json
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Python tooling artifacts
+*.egg-info/
+.pytest_cache/
+*.log

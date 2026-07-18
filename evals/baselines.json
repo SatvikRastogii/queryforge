@@ -1,0 +1,413 @@
+{
+  "storage_budget_mb": 25.0,
+  "none": {
+    "ddls": [],
+    "n_indexes": 0,
+    "p50_total_ms": 63952.698,
+    "storage_mb": 0.0,
+    "within_budget": true,
+    "timed_out": [
+      "q17",
+      "q20"
+    ],
+    "failed_ddl": []
+  },
+  "naive": {
+    "ddls": [
+      "CREATE INDEX qf_056c7d44e520 ON part USING btree (p_brand)",
+      "CREATE INDEX qf_0ba6e2c5cad4 ON supplier USING btree (s_name)",
+      "CREATE INDEX qf_12470ed230c6 ON region USING btree (r_regionkey)",
+      "CREATE INDEX qf_125af24278c0 ON lineitem USING btree (l_shipinstruct)",
+      "CREATE INDEX qf_2aa28b38877c ON partsupp USING btree (ps_supplycost)",
+      "CREATE INDEX qf_2cb4d8e011a6 ON customer USING btree (c_comment)",
+      "CREATE INDEX qf_3083825f40a6 ON customer USING btree (c_phone)",
+      "CREATE INDEX qf_3218cc2c4e19 ON customer USING btree (c_acctbal)",
+      "CREATE INDEX qf_329e41b7d775 ON orders USING btree (o_totalprice)",
+      "CREATE INDEX qf_3ba9de42996a ON customer USING btree (c_address)",
+      "CREATE INDEX qf_3c493062ac30 ON orders USING btree (o_orderkey)",
+      "CREATE INDEX qf_40a0ab99fd88 ON orders USING btree (o_shippriority)",
+      "CREATE INDEX qf_484c4027cde2 ON partsupp USING btree (ps_availqty)",
+      "CREATE INDEX qf_4cdd8dc914a7 ON lineitem USING btree (l_suppkey)",
+      "CREATE INDEX qf_53431e2a15e9 ON lineitem USING btree (l_orderkey)",
+      "CREATE INDEX qf_5c0e47541b97 ON part USING btree (p_type)",
+      "CREATE INDEX qf_600962cef1d9 ON lineitem USING btree (l_shipdate)",
+      "CREATE INDEX qf_67a692a26322 ON nation USING btree (n_name)",
+      "CREATE INDEX qf_6b3f22710778 ON customer USING btree (c_custkey)",
+      "CREATE INDEX qf_6ca529fba5e5 ON lineitem USING btree (l_receiptdate)",
+      "CREATE INDEX qf_7803cebd9547 ON lineitem USING btree (l_commitdate)",
+      "CREATE INDEX qf_82c16cca757e ON supplier USING btree (s_nationkey)",
+      "CREATE INDEX qf_83ad6748e5fc ON part USING btree (p_partkey)",
+      "CREATE INDEX qf_84e413931696 ON customer USING btree (c_name)",
+      "CREATE INDEX qf_85b662b6a632 ON lineitem USING btree (l_partkey)",
+      "CREATE INDEX qf_861860ee4e88 ON lineitem USING btree (l_returnflag)",
+      "CREATE INDEX qf_9082672158cd ON orders USING btree (o_custkey)",
+      "CREATE INDEX qf_94999e024a57 ON customer USING btree (c_nationkey)",
+      "CREATE INDEX qf_97b7ad22e125 ON supplier USING btree (s_suppkey)",
+      "CREATE INDEX qf_a1adebe0a280 ON lineitem USING btree (l_linestatus)",
+      "CREATE INDEX qf_a2f81eb0b2e6 ON partsupp USING btree (ps_suppkey)",
+      "CREATE INDEX qf_a5199f6ae5ac ON orders USING btree (o_orderstatus)",
+      "CREATE INDEX qf_a8c03c4bc704 ON part USING btree (p_size)",
+      "CREATE INDEX qf_ad97dc036882 ON nation USING btree (n_regionkey)",
+      "CREATE INDEX qf_af1cd8a21e4e ON customer USING btree (c_mktsegment)",
+      "CREATE INDEX qf_b2327adf32da ON supplier USING btree (s_acctbal)",
+      "CREATE INDEX qf_b59b67969f72 ON lineitem USING btree (l_discount)",
+      "CREATE INDEX qf_b70bbc829733 ON part USING btree (p_container)",
+      "CREATE INDEX qf_b999180273b1 ON partsupp USING btree (ps_partkey)",
+      "CREATE INDEX qf_c165c942c32f ON lineitem USING btree (l_shipmode)",
+      "CREATE INDEX qf_c6a2b173272d ON orders USING btree (o_orderdate)",
+      "CREATE INDEX qf_d9130e433793 ON lineitem USING btree (l_quantity)",
+      "CREATE INDEX qf_dc0fa2124b7e ON nation USING btree (n_nationkey)",
+      "CREATE INDEX qf_dfadf71c7441 ON orders USING btree (o_orderpriority)",
+      "CREATE INDEX qf_ec6da029d612 ON region USING btree (r_name)",
+      "CREATE INDEX qf_f2940d7565e8 ON part USING btree (p_name)",
+      "CREATE INDEX qf_f4cbc6e7398b ON orders USING btree (o_comment)",
+      "CREATE INDEX qf_fcba57561a9e ON supplier USING btree (s_comment)"
+    ],
+    "n_indexes": 48,
+    "p50_total_ms": 3062.416,
+    "storage_mb": 104.477,
+    "within_budget": false,
+    "timed_out": [],
+    "failed_ddl": []
+  },
+  "random": {
+    "seed": 42,
+    "n": 20,
+    "n_within_budget": 19,
+    "best_within_budget": {
+      "ddls": [
+        "CREATE INDEX qf_600962cef1d9 ON lineitem USING btree (l_shipdate)",
+        "CREATE INDEX qf_94999e024a57 ON customer USING btree (c_nationkey)",
+        "CREATE INDEX qf_ad97dc036882 ON nation USING btree (n_regionkey)",
+        "CREATE INDEX qf_b999180273b1 ON partsupp USING btree (ps_partkey)"
+      ],
+      "n_indexes": 4,
+      "p50_total_ms": 61615.865,
+      "storage_mb": 5.234,
+      "within_budget": true,
+      "timed_out": [
+        "q17"
+      ],
+      "failed_ddl": []
+    },
+    "trials": [
+      {
+        "ddls": [
+          "CREATE INDEX qf_125af24278c0 ON lineitem USING btree (l_shipinstruct)",
+          "CREATE INDEX qf_3083825f40a6 ON customer USING btree (c_phone)",
+          "CREATE INDEX qf_3ba9de42996a ON customer USING btree (c_address)",
+          "CREATE INDEX qf_6ca529fba5e5 ON lineitem USING btree (l_receiptdate)",
+          "CREATE INDEX qf_7803cebd9547 ON lineitem USING btree (l_commitdate)",
+          "CREATE INDEX qf_861860ee4e88 ON lineitem USING btree (l_returnflag)"
+        ],
+        "n_indexes": 6,
+        "p50_total_ms": 63855.52,
+        "storage_mb": 17.578,
+        "within_budget": true,
+        "timed_out": [
+          "q17",
+          "q20"
+        ],
+        "failed_ddl": []
+      },
+      {
+        "ddls": [
+          "CREATE INDEX qf_484c4027cde2 ON partsupp USING btree (ps_availqty)",
+          "CREATE INDEX qf_83ad6748e5fc ON part USING btree (p_partkey)",
+          "CREATE INDEX qf_84e413931696 ON customer USING btree (c_name)",
+          "CREATE INDEX qf_94999e024a57 ON customer USING btree (c_nationkey)",
+          "CREATE INDEX qf_b2327adf32da ON supplier USING btree (s_acctbal)",
+          "CREATE INDEX qf_dfadf71c7441 ON orders USING btree (o_orderpriority)"
+        ],
+        "n_indexes": 6,
+        "p50_total_ms": 64059.07,
+        "storage_mb": 2.992,
+        "within_budget": true,
+        "timed_out": [
+          "q17",
+          "q20"
+        ],
+        "failed_ddl": []
+      },
+      {
+        "ddls": [
+          "CREATE INDEX qf_3ba9de42996a ON customer USING btree (c_address)"
+        ],
+        "n_indexes": 1,
+        "p50_total_ms": 63951.344,
+        "storage_mb": 0.688,
+        "within_budget": true,
+        "timed_out": [
+          "q17",
+          "q20"
+        ],
+        "failed_ddl": []
+      },
+      {
+        "ddls": [
+          "CREATE INDEX qf_d9130e433793 ON lineitem USING btree (l_quantity)"
+        ],
+        "n_indexes": 1,
+        "p50_total_ms": 64050.517,
+        "storage_mb": 12.906,
+        "within_budget": true,
+        "timed_out": [
+          "q17",
+          "q20"
+        ],
+        "failed_ddl": []
+      },
+      {
+        "ddls": [
+          "CREATE INDEX qf_b70bbc829733 ON part USING btree (p_container)",
+          "CREATE INDEX qf_b999180273b1 ON partsupp USING btree (ps_partkey)"
+        ],
+        "n_indexes": 2,
+        "p50_total_ms": 63951.081,
+        "storage_mb": 1.109,
+        "within_budget": true,
+        "timed_out": [
+          "q17",
+          "q20"
+        ],
+        "failed_ddl": []
+      },
+      {
+        "ddls": [
+          "CREATE INDEX qf_a8c03c4bc704 ON part USING btree (p_size)"
+        ],
+        "n_indexes": 1,
+        "p50_total_ms": 63995.875,
+        "storage_mb": 0.156,
+        "within_budget": true,
+        "timed_out": [
+          "q17",
+          "q20"
+        ],
+        "failed_ddl": []
+      },
+      {
+        "ddls": [
+          "CREATE INDEX qf_0ba6e2c5cad4 ON supplier USING btree (s_name)",
+          "CREATE INDEX qf_ec6da029d612 ON region USING btree (r_name)"
+        ],
+        "n_indexes": 2,
+        "p50_total_ms": 63994.361,
+        "storage_mb": 0.086,
+        "within_budget": true,
+        "timed_out": [
+          "q17",
+          "q20"
+        ],
+        "failed_ddl": []
+      },
+      {
+        "ddls": [
+          "CREATE INDEX qf_125af24278c0 ON lineitem USING btree (l_shipinstruct)",
+          "CREATE INDEX qf_3c493062ac30 ON orders USING btree (o_orderkey)",
+          "CREATE INDEX qf_484c4027cde2 ON partsupp USING btree (ps_availqty)",
+          "CREATE INDEX qf_6ca529fba5e5 ON lineitem USING btree (l_receiptdate)",
+          "CREATE INDEX qf_83ad6748e5fc ON part USING btree (p_partkey)",
+          "CREATE INDEX qf_a5199f6ae5ac ON orders USING btree (o_orderstatus)"
+        ],
+        "n_indexes": 6,
+        "p50_total_ms": 63748.897,
+        "storage_mb": 13.742,
+        "within_budget": true,
+        "timed_out": [
+          "q17",
+          "q20"
+        ],
+        "failed_ddl": []
+      },
+      {
+        "ddls": [
+          "CREATE INDEX qf_a1adebe0a280 ON lineitem USING btree (l_linestatus)"
+        ],
+        "n_indexes": 1,
+        "p50_total_ms": 64133.738,
+        "storage_mb": 3.992,
+        "within_budget": true,
+        "timed_out": [
+          "q17",
+          "q20"
+        ],
+        "failed_ddl": []
+      },
+      {
+        "ddls": [
+          "CREATE INDEX qf_125af24278c0 ON lineitem USING btree (l_shipinstruct)",
+          "CREATE INDEX qf_82c16cca757e ON supplier USING btree (s_nationkey)",
+          "CREATE INDEX qf_b59b67969f72 ON lineitem USING btree (l_discount)",
+          "CREATE INDEX qf_d9130e433793 ON lineitem USING btree (l_quantity)",
+          "CREATE INDEX qf_dc0fa2124b7e ON nation USING btree (n_nationkey)",
+          "CREATE INDEX qf_dfadf71c7441 ON orders USING btree (o_orderpriority)"
+        ],
+        "n_indexes": 6,
+        "p50_total_ms": 64049.668,
+        "storage_mb": 31.0,
+        "within_budget": false,
+        "timed_out": [
+          "q17",
+          "q20"
+        ],
+        "failed_ddl": []
+      },
+      {
+        "ddls": [
+          "CREATE INDEX qf_84e413931696 ON customer USING btree (c_name)"
+        ],
+        "n_indexes": 1,
+        "p50_total_ms": 64148.032,
+        "storage_mb": 0.594,
+        "within_budget": true,
+        "timed_out": [
+          "q17",
+          "q20"
+        ],
+        "failed_ddl": []
+      },
+      {
+        "ddls": [
+          "CREATE INDEX qf_600962cef1d9 ON lineitem USING btree (l_shipdate)",
+          "CREATE INDEX qf_94999e024a57 ON customer USING btree (c_nationkey)",
+          "CREATE INDEX qf_ad97dc036882 ON nation USING btree (n_regionkey)",
+          "CREATE INDEX qf_b999180273b1 ON partsupp USING btree (ps_partkey)"
+        ],
+        "n_indexes": 4,
+        "p50_total_ms": 61615.865,
+        "storage_mb": 5.234,
+        "within_budget": true,
+        "timed_out": [
+          "q17"
+        ],
+        "failed_ddl": []
+      },
+      {
+        "ddls": [
+          "CREATE INDEX qf_82c16cca757e ON supplier USING btree (s_nationkey)"
+        ],
+        "n_indexes": 1,
+        "p50_total_ms": 64035.727,
+        "storage_mb": 0.016,
+        "within_budget": true,
+        "timed_out": [
+          "q17",
+          "q20"
+        ],
+        "failed_ddl": []
+      },
+      {
+        "ddls": [
+          "CREATE INDEX qf_3083825f40a6 ON customer USING btree (c_phone)",
+          "CREATE INDEX qf_83ad6748e5fc ON part USING btree (p_partkey)",
+          "CREATE INDEX qf_84e413931696 ON customer USING btree (c_name)",
+          "CREATE INDEX qf_9082672158cd ON orders USING btree (o_custkey)"
+        ],
+        "n_indexes": 4,
+        "p50_total_ms": 64144.862,
+        "storage_mb": 2.727,
+        "within_budget": true,
+        "timed_out": [
+          "q17",
+          "q20"
+        ],
+        "failed_ddl": []
+      },
+      {
+        "ddls": [
+          "CREATE INDEX qf_2aa28b38877c ON partsupp USING btree (ps_supplycost)",
+          "CREATE INDEX qf_5c0e47541b97 ON part USING btree (p_type)",
+          "CREATE INDEX qf_a2f81eb0b2e6 ON partsupp USING btree (ps_suppkey)",
+          "CREATE INDEX qf_c165c942c32f ON lineitem USING btree (l_shipmode)",
+          "CREATE INDEX qf_f4cbc6e7398b ON orders USING btree (o_comment)"
+        ],
+        "n_indexes": 5,
+        "p50_total_ms": 64024.623,
+        "storage_mb": 17.023,
+        "within_budget": true,
+        "timed_out": [
+          "q17",
+          "q20"
+        ],
+        "failed_ddl": []
+      },
+      {
+        "ddls": [
+          "CREATE INDEX qf_0ba6e2c5cad4 ON supplier USING btree (s_name)",
+          "CREATE INDEX qf_af1cd8a21e4e ON customer USING btree (c_mktsegment)"
+        ],
+        "n_indexes": 2,
+        "p50_total_ms": 64323.224,
+        "storage_mb": 0.188,
+        "within_budget": true,
+        "timed_out": [
+          "q17",
+          "q20"
+        ],
+        "failed_ddl": []
+      },
+      {
+        "ddls": [
+          "CREATE INDEX qf_12470ed230c6 ON region USING btree (r_regionkey)"
+        ],
+        "n_indexes": 1,
+        "p50_total_ms": 64157.505,
+        "storage_mb": 0.016,
+        "within_budget": true,
+        "timed_out": [
+          "q17",
+          "q20"
+        ],
+        "failed_ddl": []
+      },
+      {
+        "ddls": [
+          "CREATE INDEX qf_84e413931696 ON customer USING btree (c_name)",
+          "CREATE INDEX qf_c165c942c32f ON lineitem USING btree (l_shipmode)"
+        ],
+        "n_indexes": 2,
+        "p50_total_ms": 64163.205,
+        "storage_mb": 4.656,
+        "within_budget": true,
+        "timed_out": [
+          "q17",
+          "q20"
+        ],
+        "failed_ddl": []
+      },
+      {
+        "ddls": [
+          "CREATE INDEX qf_9082672158cd ON orders USING btree (o_custkey)",
+          "CREATE INDEX qf_94999e024a57 ON customer USING btree (c_nationkey)"
+        ],
+        "n_indexes": 2,
+        "p50_total_ms": 64420.721,
+        "storage_mb": 1.336,
+        "within_budget": true,
+        "timed_out": [
+          "q17",
+          "q20"
+        ],
+        "failed_ddl": []
+      },
+      {
+        "ddls": [
+          "CREATE INDEX qf_2aa28b38877c ON partsupp USING btree (ps_supplycost)",
+          "CREATE INDEX qf_40a0ab99fd88 ON orders USING btree (o_shippriority)",
+          "CREATE INDEX qf_f4cbc6e7398b ON orders USING btree (o_comment)"
+        ],
+        "n_indexes": 3,
+        "p50_total_ms": 64075.126,
+        "storage_mb": 13.273,
+        "within_budget": true,
+        "timed_out": [
+          "q17",
+          "q20"
+        ],
+        "failed_ddl": []
+      }
+    ]
+  },
+  "wall_s": 1760.5
+}
