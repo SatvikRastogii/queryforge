@@ -13,6 +13,11 @@ a set of `CREATE INDEX` statements; a real PostgreSQL benchmark (`oracle.py`) bu
 the workload with `EXPLAIN (ANALYZE, BUFFERS)`. Every number in this project is measured. Nothing
 is estimated, simulated, or mocked.
 
+The headline benchmark below runs on the fixed 22-query TPC-H workload, but the same search also
+runs on **arbitrary user-submitted SQL** through a FastAPI endpoint (`GET`/`POST /custom`), guarded
+by a read-only allowlist and a least-privilege Postgres role — so it is a general index advisor, not
+a single hard-coded demo. See [Custom workloads](#custom-workloads-getpost-custom).
+
 ## Result
 
 Workload: the 22 TPC-H queries at scale factor 0.1 (600k-row `lineitem`). Storage budget: **25 MB**.
@@ -189,3 +194,39 @@ These were deliberate calls, made for correctness or defensibility rather than c
   integration-verified (see `graph.py`'s `archive_node`, `app.py`'s `replay()`, `specs.py`'s
   `validate()`/`IndexSpec`), and the numbers in this README are from a full run *after* the fixes,
   not before.
+
+## Example queries for `/custom`
+
+Paste any of these into the `/custom` box (separate multiple with `;`, up to 10). All are read-only
+`SELECT`s against the TPC-H tables; each exercises a different index.
+
+```sql
+-- selective filter on a large table (rewards an index on l_shipdate)
+SELECT l_orderkey, l_quantity FROM lineitem WHERE l_shipdate = date '1994-03-15';
+
+-- compound filter on orders (o_orderdate + o_orderstatus)
+SELECT o_orderkey, o_totalprice FROM orders
+WHERE o_orderdate >= date '1995-01-01' AND o_orderstatus = 'O';
+
+-- group-by after a filter on part
+SELECT p_brand, count(*) FROM part WHERE p_size = 15 GROUP BY p_brand;
+
+-- join across the o_custkey / c_custkey keys
+SELECT o_orderkey, o_totalprice
+FROM orders JOIN customer ON o_custkey = c_custkey
+WHERE c_mktsegment = 'AUTOMOBILE' AND o_orderdate < date '1995-03-15';
+```
+
+A multi-query workload — paste all three together and the search must find indexes that help the
+whole set, not just one query:
+
+```sql
+SELECT l_returnflag, l_linestatus, sum(l_quantity) FROM lineitem WHERE l_shipdate <= date '1998-09-01' GROUP BY l_returnflag, l_linestatus;
+SELECT o_orderpriority, count(*) FROM orders WHERE o_orderdate >= date '1993-07-01' GROUP BY o_orderpriority;
+SELECT ps_partkey, min(ps_supplycost) FROM partsupp GROUP BY ps_partkey;
+```
+
+Two behaviours worth expecting, both honest by design: a single already-fast query can legitimately
+come back **0% faster** (nothing within budget beat the baseline — a real result, not a bug), and a
+broken query (e.g. `SELECT nope FROM lineitem`) is rejected instantly with Postgres's exact error,
+*before* any benchmark runs.
