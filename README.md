@@ -145,6 +145,33 @@ substitutes for the other:
    plain `EXPLAIN` (plans, never executes) and returns Postgres's own exact error if the query is
    invalid — so a bad query is rejected loudly *before* any benchmark or LLM call, never silently.
 
+## Guardrails — protecting the shared benchmark, not the SQL surface
+
+The controls above stop a malicious *statement*. These stop a well-formed request from breaking the
+*shared, stateful* thing it runs against — `/live` and `/custom` both call `oracle.reset_indexes()` →
+build → benchmark against the same Postgres schema, and both trigger real Groq calls:
+
+1. **Concurrency lock (`app._run_slot`)** — a plain `threading.Lock`, held for the full duration of a
+   run. Two simultaneous requests racing on the shared schema would silently corrupt each other's
+   measurements — the one failure this project can't tolerate, since the measurement *is* the ground
+   truth. A second request while one is running gets HTTP 429 immediately, never a queued wait.
+2. **Run cooldown** — a fixed 30s gap enforced between runs (module-level timestamp, checked before
+   the lock). Keeps a scripted or repeated hit on the public endpoints from burning through Groq's
+   daily token quota or hammering Postgres back-to-back.
+3. **Groq daily token budget (`graph._check_token_budget`)** — tracks real `usage.total_tokens` from
+   every response against Groq's free-tier tokens-per-day caps (70B: 100K, 8B: 500K — see the Stack
+   section above). Once a model's counter is at or over its cap, the *next* call raises before it's
+   made — loud, not a silent skip — and propagates like any other Groq error. In-memory only; a
+   restart resets it, which is fine since Groq's own 429 (already retried with bounded backoff) is
+   still the backstop.
+4. **`/custom` body size cap** — a small ASGI middleware rejects a POST with `Content-Length` over
+   50 KB with HTTP 413, before Starlette buffers the form body. Trusts the header rather than counting
+   streamed bytes, so a client that omits it or uses chunked transfer bypasses this — an accepted gap
+   for a demo endpoint, not a hardened upload filter.
+
+Self-checks for all four: `python test_guardrails.py` (no Postgres connection or Groq call is made —
+the size-cap check rejects before either would be touched).
+
 ## Running it
 
 ```bash
@@ -163,8 +190,9 @@ python mcp_server.py                     # optional: expose the oracle as MCP to
 
 Python 3.11 · PostgreSQL 16 (`psycopg` v3) · LangGraph (`StateGraph` + `MemorySaver`) · Groq
 (`llama-3.1-8b-instant` for propose, `llama-3.3-70b-versatile` for the single analyze call —
-the free tier binds on tokens/day, so the high-volume path takes the cheap model) · Pydantic ·
-FastAPI · pandas + matplotlib · DuckDB (data generation only) · Langfuse (tracing, env-gated).
+the free tier binds on tokens/day: 500K for the 8B model, 100K for the 70B, so the high-volume
+path takes the cheap model) · Pydantic · FastAPI · pandas + matplotlib · DuckDB (data generation
+only) · Langfuse (tracing, env-gated).
 
 ## Notes and honest deviations from the original spec
 

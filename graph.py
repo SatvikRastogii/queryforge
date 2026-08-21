@@ -28,6 +28,7 @@ import operator
 import os
 import re
 import time
+from datetime import date
 from typing import Annotated, Literal, TypedDict
 
 import psycopg
@@ -48,6 +49,11 @@ AGENT_DSN = os.environ.get(
 
 MODEL_PROPOSE = "llama-3.1-8b-instant"       # high-volume path — cheap model
 MODEL_ANALYZE = "llama-3.3-70b-versatile"    # one final call only — big model
+
+# Guardrail: Groq free-tier tokens-per-day caps (see CLAUDE.md's Stack section).
+# In-memory only — a process restart resets the counter, which is fine since
+# Groq's own 429 (handled by _groq_call's retry) is still the backstop.
+TOKEN_BUDGET_PER_DAY = {MODEL_PROPOSE: 500_000, MODEL_ANALYZE: 100_000}
 
 MAX_GENERATIONS = 20
 MAX_STAGNATION = 5
@@ -119,6 +125,32 @@ _groq_client = None
 
 MAX_RATE_LIMIT_RETRIES = 5
 
+# {(model, "YYYY-MM-DD"): tokens used so far today} — see TOKEN_BUDGET_PER_DAY.
+_tokens_used_today: dict[tuple[str, str], int] = {}
+
+
+class TokenBudgetExceeded(RuntimeError):
+    """Raised instead of making a Groq call once today's usage for a model has
+    already reached its free-tier TPD cap. Not caught anywhere — it propagates
+    like any other Groq error (see _groq_call's docstring): loud, not hidden."""
+
+
+def _check_token_budget(model: str) -> None:
+    cap = TOKEN_BUDGET_PER_DAY.get(model)
+    if cap is None:
+        return
+    used = _tokens_used_today.get((model, date.today().isoformat()), 0)
+    if used >= cap:
+        raise TokenBudgetExceeded(
+            f"{model}: {used} tokens already used today, at/over the "
+            f"{cap}-token free-tier daily cap — refusing another call today"
+        )
+
+
+def _record_token_usage(model: str, total_tokens: int) -> None:
+    key = (model, date.today().isoformat())
+    _tokens_used_today[key] = _tokens_used_today.get(key, 0) + total_tokens
+
 
 def _client():
     global _groq_client
@@ -129,16 +161,28 @@ def _client():
     return _groq_client
 
 
+def _create_and_record(kwargs: dict):
+    resp = _client().chat.completions.create(**kwargs)
+    _record_token_usage(kwargs.get("model"), resp.usage.total_tokens)
+    return resp
+
+
 def _groq_call(**kwargs):
     """Groq chat call with bounded, LOUD retry on genuine 429 rate limits
     (accumulated tokens-per-minute). We retry only RateLimitError — a request
     that is simply too large fails fast and is allowed to surface. Retries are
-    logged and capped; after the cap the error propagates. Nothing is hidden."""
+    logged and capped; after the cap the error propagates. Nothing is hidden.
+
+    Also enforces the daily token budget (guardrail): checked before the call,
+    recorded from the real response's usage after it, so the counter reflects
+    ACTUAL Groq-reported usage, never an estimate."""
     from groq import RateLimitError
 
+    model = kwargs.get("model")
+    _check_token_budget(model)
     for attempt in range(MAX_RATE_LIMIT_RETRIES):
         try:
-            return _client().chat.completions.create(**kwargs)
+            return _create_and_record(kwargs)
         except RateLimitError as e:
             wait = min(2 ** attempt, 30)
             logging.warning(
@@ -146,7 +190,7 @@ def _groq_call(**kwargs):
                 attempt + 1, MAX_RATE_LIMIT_RETRIES, wait, e,
             )
             time.sleep(wait)
-    return _client().chat.completions.create(**kwargs)  # last try — let it raise
+    return _create_and_record(kwargs)  # last try — let it raise
 
 
 def _chat(_trace_meta: dict | None = None, **kwargs):

@@ -11,15 +11,18 @@ Everything shown is measured. If an artifact is missing, the page says so
 rather than inventing numbers.
 """
 
+import contextlib
 import csv
 import hashlib
 import html
 import json
+import threading
+import time
 from pathlib import Path
 from uuid import uuid4
 
 import uvicorn
-from fastapi import FastAPI, Form
+from fastapi import FastAPI, Form, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
 import graph
@@ -35,6 +38,58 @@ app = FastAPI(title="QueryForge")
 # REAL past measurement (labeled cached), never a fabricated number.
 _CUSTOM_CACHE: dict[str, dict] = {}
 MAX_CUSTOM_QUERIES = 10
+
+# --------------------------------------------------------------------------
+# Guardrails: /live and /custom both run oracle.reset_indexes() -> build ->
+# benchmark against the SAME shared Postgres schema. Two concurrent runs would
+# race on that shared state and silently corrupt each other's measurements —
+# the one failure mode CLAUDE.md singles out (measurement must be ground
+# truth). So only one run at a time, plus a cooldown between runs so a public
+# deployment can't be hammered into burning Groq's daily token quota.
+# --------------------------------------------------------------------------
+_BENCH_LOCK = threading.Lock()
+_last_run_finished_at = 0.0
+RUN_COOLDOWN_S = 30.0
+
+
+class BenchmarkBusy(Exception):
+    """A run is already in progress, or the cooldown since the last one
+    finished hasn't elapsed yet."""
+
+
+@contextlib.contextmanager
+def _run_slot():
+    global _last_run_finished_at
+    if time.monotonic() - _last_run_finished_at < RUN_COOLDOWN_S:
+        raise BenchmarkBusy(
+            f"a benchmark run just finished — wait {RUN_COOLDOWN_S:.0f}s between runs"
+        )
+    if not _BENCH_LOCK.acquire(blocking=False):
+        raise BenchmarkBusy("a benchmark run is already in progress — try again shortly")
+    try:
+        yield
+    finally:
+        _last_run_finished_at = time.monotonic()
+        _BENCH_LOCK.release()
+
+
+MAX_CUSTOM_BODY_BYTES = 50_000  # /custom's raw form body, checked via Content-Length
+
+
+@app.middleware("http")
+async def _limit_custom_body_size(request: Request, call_next):
+    # ponytail: trusts the client's Content-Length header rather than counting
+    # streamed bytes: a client that lies (omits it, or uses chunked transfer)
+    # bypasses this. Upgrade to a byte-counting body wrapper if that's ever
+    # exploited; not worth it for a demo endpoint today.
+    if request.method == "POST" and request.url.path == "/custom":
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > MAX_CUSTOM_BODY_BYTES:
+            return JSONResponse(
+                {"error": f"request body too large (max {MAX_CUSTOM_BODY_BYTES} bytes)"},
+                status_code=413,
+            )
+    return await call_next(request)
 
 # Standard, documented TPC-H table semantics — schema DOCUMENTATION for users
 # who don't know the benchmark, not a measurement. Row counts shown alongside
@@ -164,23 +219,28 @@ def replay():
 @app.post("/live")
 def live():
     """Run a real 3-generation search and return a measured summary."""
-    compiled = graph.build_graph()
-    initial = {
-        "workload": WORKLOAD,
-        "storage_budget_mb": graph.STORAGE_BUDGET_MB,
-        "max_generations": 3,
-    }
-    # A fresh thread_id per call. build_graph() already makes a new MemorySaver
-    # per request, so today the checkpointer is never shared and a fixed id
-    # would still start clean — but a unique id is the defensive default: it
-    # keeps state isolated even if the graph/checkpointer is ever hoisted to be
-    # built once and reused. (This is not fixing an observed resumption bug.)
-    with graph.search_trace(mode="live", generations=3):
-        final = compiled.invoke(
-            initial,
-            config={"configurable": {"thread_id": str(uuid4())}, "recursion_limit": 200},
-        )
-    graph.flush_traces()
+    try:
+        with _run_slot():
+            compiled = graph.build_graph()
+            initial = {
+                "workload": WORKLOAD,
+                "storage_budget_mb": graph.STORAGE_BUDGET_MB,
+                "max_generations": 3,
+            }
+            # A fresh thread_id per call. build_graph() already makes a new
+            # MemorySaver per request, so today the checkpointer is never
+            # shared and a fixed id would still start clean — but a unique id
+            # is the defensive default: it keeps state isolated even if the
+            # graph/checkpointer is ever hoisted to be built once and reused.
+            # (This is not fixing an observed resumption bug.)
+            with graph.search_trace(mode="live", generations=3):
+                final = compiled.invoke(
+                    initial,
+                    config={"configurable": {"thread_id": str(uuid4())}, "recursion_limit": 200},
+                )
+            graph.flush_traces()
+    except BenchmarkBusy as e:
+        return JSONResponse({"error": str(e)}, status_code=429)
     return {
         "baseline_ms": final["baseline_ms"],
         "best_ms": final["best_ms"],
@@ -245,7 +305,7 @@ benchmarking and takes a few minutes.</div>
     return _page("QueryForge — custom", body)
 
 
-def _custom_error_page(errors: list[str]) -> HTMLResponse:
+def _custom_error_page(errors: list[str], status_code: int = 400) -> HTMLResponse:
     items = "".join(f"<li><code>{html.escape(e)}</code></li>" for e in errors)
     body = f"""
 <h1>Query rejected</h1>
@@ -254,7 +314,7 @@ Fix the issues below and resubmit.</div>
 <ul>{items}</ul>
 <p><a href="/custom">← back to the form</a></p>
 """
-    return HTMLResponse(_page("QueryForge — rejected", body), status_code=400)
+    return HTMLResponse(_page("QueryForge — rejected", body), status_code=status_code)
 
 
 def _custom_result_page(result: dict, cached: bool) -> HTMLResponse:
@@ -344,18 +404,22 @@ def custom_run(queries: str = Form(...)):
     if cached:
         return _custom_result_page(_CUSTOM_CACHE[key], cached=True)
 
-    compiled = graph.build_graph()
-    initial = {
-        "workload": workload,
-        "storage_budget_mb": graph.STORAGE_BUDGET_MB,
-        "max_generations": 3,
-    }
-    with graph.search_trace(mode="custom", generations=3):
-        final = compiled.invoke(
-            initial,
-            config={"configurable": {"thread_id": str(uuid4())}, "recursion_limit": 200},
-        )
-    graph.flush_traces()
+    try:
+        with _run_slot():
+            compiled = graph.build_graph()
+            initial = {
+                "workload": workload,
+                "storage_budget_mb": graph.STORAGE_BUDGET_MB,
+                "max_generations": 3,
+            }
+            with graph.search_trace(mode="custom", generations=3):
+                final = compiled.invoke(
+                    initial,
+                    config={"configurable": {"thread_id": str(uuid4())}, "recursion_limit": 200},
+                )
+            graph.flush_traces()
+    except BenchmarkBusy as e:
+        return _custom_error_page([str(e)], status_code=429)
 
     base_entry = graph._find_config_entry(final, [])
     best_entry = graph._find_config_entry(final, final["best_config"])
