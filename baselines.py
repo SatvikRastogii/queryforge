@@ -139,4 +139,8 @@ def main() -> None:
               f"{rnd['n_within_budget']}/{RANDOM_N} trials fit budget)")
     else:
         print(f"  random: NONE of {RANDOM_N} trials fit the budget")
-    print(f"\n  wrote {OUT_PATH}  (wall {out['wall_s'
+    print(f"\n  wrote {OUT_PATH}  (wall {out['wall_s']:.1f}s)")
+
+
+if __name__ == "__main__":
+    main()
