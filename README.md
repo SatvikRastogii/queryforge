@@ -196,25 +196,44 @@ uvicorn app:app --host 0.0.0.0 --port 7860   # /replay UI, /live 3-gen demo, /cu
 python mcp_server.py                     # optional: expose the oracle as MCP tools
 ```
 
-## Deploying (Hugging Face Spaces)
+## Deploying
 
-A single Docker Space runs Postgres 16 and the FastAPI app in one container (`Dockerfile` +
-`start.sh`): Postgres starts first, `db/init.sql` creates the least-privilege `queryforge_agent`
-role/database, `load_data.py` loads TPC-H fresh, then `uvicorn` serves on port 7860 (the `app_port`
-the YAML frontmatter at the top of this file declares, alongside `sdk: docker`).
+The app image (`Dockerfile`) is host-agnostic: it's plain Python 3.11 + `uvicorn`, no Postgres
+inside it. Postgres lives externally, reached via `PG_AGENT_DSN` — so the same image deploys to
+Render, Fly, a HF Spaces Docker Space, or anywhere else that can set env vars and expose a port.
+This is a two-part setup: provision the database once, then deploy the app.
 
-1. Create a new Space at huggingface.co/new-space, SDK **Docker**.
-2. Push this repo to the Space's git remote (`git remote add space <url>`, `git push space main`).
-3. In the Space's **Settings → Repository secrets**, add `GROQ_API_KEY` (required) and, if you want
-   tracing, `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_HOST`. `PG_AGENT_DSN` does not
-   need to be set — it's baked into the image, since Postgres only listens inside the container.
-4. First boot takes longer than later ones (image build + `initdb` + data load); watch the Space's
-   build/container logs for `Starting QueryForge on port 7860`.
+### 1. Database (Neon, one-time)
 
-The free tier has no persistent disk, so Postgres reinitializes and reloads TPC-H on every restart —
-consistent with how this project already treats DB state everywhere else (`oracle.reset_indexes()`,
-`load_data.py`'s idempotent reload). Swap in an external managed Postgres (e.g. Neon/Supabase) and
-point `PG_AGENT_DSN` at it if you want the database itself to persist across restarts.
+1. Create a free project at neon.tech; copy its connection string (it connects as your project's
+   owner role, which can create roles/databases — the same privilege `postgres:16`'s superuser has
+   in `docker-compose.yml`).
+2. Run `db/init.sql` against it once (`psql "<neon-connection-string>" -f db/init.sql`) to create the
+   least-privilege `queryforge_agent` role and the `queryforge` database, exactly as it does locally.
+   (The `REVOKE CONNECT ON DATABASE postgres` line assumes a database literally named `postgres`
+   exists — Neon's default database has a different name, so that one line may error harmlessly;
+   the role/database creation before it is what matters.)
+3. Set `PG_AGENT_DSN` locally to the agent connection string (Neon lets you generate one scoped to
+   `queryforge_agent`/`queryforge`) and run `python load_data.py` once — this is the same script
+   `docker-compose.yml` users run locally, just pointed at Neon instead of localhost. Unlike the
+   local/single-container setup, this data now **persists**: the app never reloads it on boot.
+
+### 2. App (Render, or any Docker host)
+
+`render.yaml` is a ready-to-use Render blueprint.
+
+1. Push this repo to GitHub (Render deploys from a repo, not a direct git push like HF Spaces).
+2. On render.com, **New → Blueprint**, point it at the repo — it reads `render.yaml` and creates a
+   free-tier web service from the `Dockerfile`.
+3. Fill in the env vars Render prompts for (marked `sync: false` in `render.yaml`, so they're never
+   committed): `GROQ_API_KEY` (required), `PG_AGENT_DSN` (the Neon connection string from step 1),
+   and optionally `LANGFUSE_PUBLIC_KEY`/`LANGFUSE_SECRET_KEY`/`LANGFUSE_HOST`.
+4. Render sets a `PORT` env var and expects the container to bind it; the Dockerfile's `CMD` reads
+   `${PORT:-7860}` so this works whether or not a platform sets it.
+
+Render's free web service tier spins down after inactivity (a cold start on the next request), which
+is fine for a portfolio demo. Any other Docker-friendly host works the same way — just set the same
+three env vars and expose the container's port.
 
 ## Stack
 
