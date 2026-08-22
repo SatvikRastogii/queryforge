@@ -1,3 +1,13 @@
+---
+title: QueryForge
+emoji: 🔍
+colorFrom: blue
+colorTo: purple
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # QueryForge
 
 **LLM-guided search over PostgreSQL index configurations, judged by a real benchmark.**
@@ -185,6 +195,26 @@ python evals/run_search.py               # the 20-gen search → results.csv + f
 uvicorn app:app --host 0.0.0.0 --port 7860   # /replay UI, /live 3-gen demo, /custom own-query search
 python mcp_server.py                     # optional: expose the oracle as MCP tools
 ```
+
+## Deploying (Hugging Face Spaces)
+
+A single Docker Space runs Postgres 16 and the FastAPI app in one container (`Dockerfile` +
+`start.sh`): Postgres starts first, `db/init.sql` creates the least-privilege `queryforge_agent`
+role/database, `load_data.py` loads TPC-H fresh, then `uvicorn` serves on port 7860 (the `app_port`
+the YAML frontmatter at the top of this file declares, alongside `sdk: docker`).
+
+1. Create a new Space at huggingface.co/new-space, SDK **Docker**.
+2. Push this repo to the Space's git remote (`git remote add space <url>`, `git push space main`).
+3. In the Space's **Settings → Repository secrets**, add `GROQ_API_KEY` (required) and, if you want
+   tracing, `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_HOST`. `PG_AGENT_DSN` does not
+   need to be set — it's baked into the image, since Postgres only listens inside the container.
+4. First boot takes longer than later ones (image build + `initdb` + data load); watch the Space's
+   build/container logs for `Starting QueryForge on port 7860`.
+
+The free tier has no persistent disk, so Postgres reinitializes and reloads TPC-H on every restart —
+consistent with how this project already treats DB state everywhere else (`oracle.reset_indexes()`,
+`load_data.py`'s idempotent reload). Swap in an external managed Postgres (e.g. Neon/Supabase) and
+point `PG_AGENT_DSN` at it if you want the database itself to persist across restarts.
 
 ## Stack
 
