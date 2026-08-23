@@ -15,7 +15,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY db/init.sql /docker-entrypoint-initdb.d/init.sql
 
 ENV POSTGRES_PASSWORD=postgres
-ENV PG_AGENT_DSN=postgresql://queryforge_agent:agentpw@localhost:5432/queryforge
+# Unix socket, not TCP -- see start.sh's listen_addreses='' comment. The
+# empty authority (postgresql://user:pass@/db) plus ?host=<socket dir> is
+# libpq's documented URI form for a Unix-socket connection; local
+# connections use trust auth by default (the image's own initdb warning
+# confirms this every boot), so the password here is inert, just kept for
+# clarity/consistency with the other PG_AGENT_DSN defaults in the codebase.
+ENV PG_AGENT_DSN=postgresql://queryforge_agent:agentpw@/queryforge?host=/var/run/postgresql
 
 WORKDIR /app
 COPY requirements.txt .

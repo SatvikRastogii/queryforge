@@ -10,22 +10,20 @@
 # temporary start.
 set -euo pipefail
 
-# -c listen_addresses=localhost: the official image's default is '*' (every
-# interface), meant for other containers on a docker-compose network to
-# reach it. We don't need that -- the app talks to Postgres over localhost
-# in this SAME container -- and leaving it on '*' means Render's external
-# port-scanning/health checks can open real TCP connections to 5432 (it's
-# still EXPOSEd, inherited from the postgres:16 base image), spamming
-# "invalid length of startup packet" and, worse, apparently confusing
-# Render's readiness detection for the whole deploy (confirmed live: a
-# persistent 502 with Render's log still "scanning for open port 7860"
-# minutes in, alongside a constant stream of those Postgres errors).
-# Loopback-only makes 5432 genuinely unreachable from outside the container,
-# not just less discoverable.
-docker-entrypoint.sh postgres -c listen_addresses=localhost &
+# -c listen_addresses='': no TCP listener AT ALL -- only the Unix domain
+# socket remains (still enabled by default via unix_socket_directories).
+# Binding to 127.0.0.1 alone was NOT enough: Render's port-scanner/health
+# check evidently runs in the SAME network namespace as the container (the
+# "invalid length of startup packet" flood + a stuck deploy persisted even
+# after that fix, confirmed on a real redeploy) -- same-namespace TCP
+# clients can reach a loopback-bound service same as the app can, so the
+# only thing that closes this off for real is removing the TCP listener
+# entirely. The app already only needs Postgres from within this same
+# container, so a Unix socket is sufficient -- see PG_AGENT_DSN below.
+docker-entrypoint.sh postgres -c listen_addresses='' &
 
 echo "Waiting for Postgres (queryforge_agent/queryforge) to be ready..."
-until PGPASSWORD=agentpw psql -h localhost -U queryforge_agent -d queryforge -c 'SELECT 1' >/dev/null 2>&1; do
+until PGPASSWORD=agentpw psql -U queryforge_agent -d queryforge -c 'SELECT 1' >/dev/null 2>&1; do
   sleep 1
 done
 
