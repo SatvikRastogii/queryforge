@@ -79,7 +79,7 @@ baseline ─▶ propose ─▶ validate ─▶ benchmark ─▶ archive ─▶ a
 
 A LangGraph state machine (`graph.py`). Each generation:
 
-1. **propose** — Groq `llama-3.1-8b-instant` proposes an index set as structured JSON
+1. **propose** — Groq `openai/gpt-oss-20b` proposes an index set as structured JSON
    (Pydantic-validated). Its prompt contains, in order: the schema with row counts; a compact
    **per-query access fingerprint** (the columns each query uses in WHERE/JOIN/GROUP BY/ORDER BY,
    with the query's measured baseline cost — this replaces raw SQL and cuts the prompt from ~7,000
@@ -91,7 +91,7 @@ A LangGraph state machine (`graph.py`). Each generation:
 3. **benchmark** — `oracle.benchmark()` builds the indexes and measures the workload. Ground truth.
 4. **archive** — records the measurement; enforces the budget on the **measured** size; feeds the
    real per-index sizes and any DDL errors back into the next prompt.
-5. **analyze** — one final `llama-3.3-70b-versatile` call summarizes the run.
+5. **analyze** — one final `openai/gpt-oss-120b` call summarizes the run.
 
 The `history` channel uses an `operator.add` reducer so every node *appends* to an append-only log;
 this cross-generation memory is what the propose node reads its failures from.
@@ -169,8 +169,8 @@ build → benchmark against the same Postgres schema, and both trigger real Groq
    the lock). Keeps a scripted or repeated hit on the public endpoints from burning through Groq's
    daily token quota or hammering Postgres back-to-back.
 3. **Groq daily token budget (`graph._check_token_budget`)** — tracks real `usage.total_tokens` from
-   every response against Groq's free-tier tokens-per-day caps (70B: 100K, 8B: 500K — see the Stack
-   section above). Once a model's counter is at or over its cap, the *next* call raises before it's
+   every response against Groq's free-tier tokens-per-day cap (200K, shared by both models — see the
+   Stack section above). Once a model's counter is at or over its cap, the *next* call raises before it's
    made — loud, not a silent skip — and propagates like any other Groq error. In-memory only; a
    restart resets it, which is fine since Groq's own 429 (already retried with bounded backoff) is
    still the backstop.
@@ -221,10 +221,11 @@ database itself to persist across restarts.
 ## Stack
 
 Python 3.11 · PostgreSQL 16 (`psycopg` v3) · LangGraph (`StateGraph` + `MemorySaver`) · Groq
-(`llama-3.1-8b-instant` for propose, `llama-3.3-70b-versatile` for the single analyze call —
-the free tier binds on tokens/day: 500K for the 8B model, 100K for the 70B, so the high-volume
-path takes the cheap model) · Pydantic · FastAPI · pandas + matplotlib · DuckDB (data generation
-only) · Langfuse (tracing, env-gated).
+(`openai/gpt-oss-20b` for propose, `openai/gpt-oss-120b` for the single analyze call — both share
+a 200K tokens/day free-tier cap; both are reasoning models, called with `reasoning_effort="low"` so
+the hidden reasoning phase doesn't eat the whole completion-token budget before an answer is
+emitted) · Pydantic · FastAPI · pandas + matplotlib · DuckDB (data generation only) · Langfuse
+(tracing, env-gated).
 
 ## Notes and honest deviations from the original spec
 

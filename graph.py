@@ -47,13 +47,19 @@ AGENT_DSN = os.environ.get(
     "PG_AGENT_DSN", "postgresql://queryforge_agent:agentpw@localhost:5432/queryforge"
 )
 
-MODEL_PROPOSE = "llama-3.1-8b-instant"       # high-volume path — cheap model
-MODEL_ANALYZE = "llama-3.3-70b-versatile"    # one final call only — big model
+MODEL_PROPOSE = "openai/gpt-oss-20b"         # high-volume path — smaller/cheaper model
+MODEL_ANALYZE = "openai/gpt-oss-120b"        # one final call only — larger model
+# Groq deprecated the original llama-3.1-8b-instant / llama-3.3-70b-versatile
+# pins (both 404 now) -- these are their current free-tier replacements,
+# verified live against Groq's /models endpoint and a real completion call's
+# rate-limit headers, not guessed from stale docs.
 
 # Guardrail: Groq free-tier tokens-per-day caps (see CLAUDE.md's Stack section).
-# In-memory only — a process restart resets the counter, which is fine since
-# Groq's own 429 (handled by _groq_call's retry) is still the backstop.
-TOKEN_BUDGET_PER_DAY = {MODEL_PROPOSE: 500_000, MODEL_ANALYZE: 100_000}
+# Both models share the same 200K TPD on the free tier (confirmed via Groq's
+# rate-limits docs) -- unlike the old Llama pins, which had different caps per
+# model. In-memory only — a process restart resets the counter, which is fine
+# since Groq's own 429 (handled by _groq_call's retry) is still the backstop.
+TOKEN_BUDGET_PER_DAY = {MODEL_PROPOSE: 200_000, MODEL_ANALYZE: 200_000}
 
 MAX_GENERATIONS = 20
 MAX_STAGNATION = 5
@@ -506,7 +512,15 @@ def propose_node(state: ForgeState) -> dict:
         ],
         response_format={"type": "json_object"},
         temperature=0.5,
-        max_tokens=1200,
+        max_tokens=2200,
+        # GPT-OSS models spend completion tokens on a hidden reasoning phase
+        # before the actual answer (verified live: default effort burned
+        # ~1500 reasoning tokens on gen-1's prompt alone, leaving nothing for
+        # the JSON within the old max_tokens=1200 -> empty failed_generation).
+        # "low" cuts that a lot, but a later generation's longer prompt
+        # (accumulated history/failures) still needed more than 1200 total
+        # even at "low" -- confirmed live via evals/smoke_graph.py.
+        reasoning_effort="low",
     )
     content = resp.choices[0].message.content
     tok = {
@@ -665,6 +679,7 @@ def analyze_node(state: ForgeState) -> dict:
         ],
         temperature=0.3,
         max_tokens=700,
+        reasoning_effort="low",  # see propose_node's comment — same reasoning-phase risk
     )
     return {
         "history": [

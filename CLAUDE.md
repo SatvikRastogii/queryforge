@@ -29,9 +29,15 @@ Optimize for defensibility, not cleverness.
 - Python 3.11, venv at ./venv
 - PostgreSQL 16 in Docker (docker compose up -d), driver: psycopg v3 (NOT psycopg2)
 - LangGraph: StateGraph + MemorySaver only. NO LangChain chains/agents/LLM wrappers.
-- Groq SDK direct: llama-3.1-8b-instant for propose/mutate;
-  llama-3.3-70b-versatile ONLY for the single final analyze call.
-  (Free tier binds on tokens/day: 70B=100K TPD, 8B=500K TPD.)
+- Groq SDK direct: openai/gpt-oss-20b for propose/mutate;
+  openai/gpt-oss-120b ONLY for the single final analyze call.
+  (Groq deprecated the original llama-3.1-8b-instant / llama-3.3-70b-versatile
+  pins; these are the current free-tier replacements. Both share the same
+  200K TPD cap, verified live against Groq's rate-limits docs and a real
+  completion call's response headers. Both are reasoning models — set
+  reasoning_effort="low" on every call, or the hidden reasoning phase alone
+  can exceed max_tokens before any answer is emitted, verified live via a
+  json_validate_failed/empty failed_generation error.)
 - Structured output: Groq JSON mode + Pydantic model_validate_json.
   ValidationError = rejected proposal, fed back to model. Never retried silently.
 - Dedup: SHA1 hash set (exact) + Jaccard over canonical index strings (near-dup),
