@@ -1,11 +1,14 @@
 """Stage 7: FastAPI on port 7860 (Hugging Face Spaces requirement).
 
-Two endpoints:
+Three pages:
   GET  /replay  — the completed 20-generation run: chart + per-generation table,
-                  read from evals/results.csv and evals/baselines.json.
-  POST /live    — a short 3-generation live search against the real database,
+                  read from evals/results.csv and evals/baselines.json, plus
+                  buttons into /custom and /live.
+  POST /live    — a short 3-generation live search on the fixed TPC-H workload,
                   so a visitor can watch the loop actually run. Takes a few
-                  minutes (it runs real benchmarks); returns a measured summary.
+                  minutes (it runs real benchmarks); renders a measured result page.
+  GET/POST /custom — the same search against user-submitted SQL, with the
+                  dataset schema and example queries shown on the form.
 
 Everything shown is measured. If an artifact is missing, the page says so
 rather than inventing numbers.
@@ -138,6 +141,9 @@ img{max-width:100%;border:1px solid #8883;border-radius:6px}
 .kpi{display:inline-block;margin-right:2rem}.kpi b{font-size:1.6rem;display:block}
 code{background:#8882;padding:1px 4px;border-radius:3px}
 .note{background:#8881;border-left:3px solid #888;padding:.6rem 1rem;border-radius:4px}
+.btn{display:inline-block;font-size:15px;padding:.5rem 1.2rem;border-radius:6px;border:1px solid #8886;
+  background:#8882;cursor:pointer;text-decoration:none;color:inherit}
+.btn:hover{background:#8884}
 """
 
 
@@ -205,20 +211,49 @@ def replay():
     return f"""<!doctype html><meta charset=utf-8><title>QueryForge</title>
 <style>{_PAGE_CSS}</style>
 <h1>QueryForge</h1>
-<p class=sub>LLM proposes Postgres indexes; a real benchmark measures them. The measurement is ground truth.</p>
+<p class=sub>LLM-guided search over Postgres index configurations, judged by a real benchmark.</p>
+<div class=note>
+An LLM proposes sets of <code>CREATE INDEX</code> statements for a fixed 22-query SQL workload
+(TPC-H). Each proposal is <b>measured for real</b> against a live Postgres database with
+<code>EXPLAIN (ANALYZE, BUFFERS)</code> — never simulated, never estimated. The LLM never grades
+itself; a stopwatch does. What's below is a completed 20-generation search.
+</div>
 <div>{kpis}</div>
+<p class=sub><b>baseline</b> = total workload latency with no indexes &middot;
+<b>best</b> = total latency under the LLM's best found index set &middot;
+<b>faster</b> = improvement over baseline &middot;
+<b>budget</b> = the storage cap every configuration had to fit under.</p>
 <img src="/fitness.png" alt="fitness curve">
 {bl_table}
 <h2>Per-generation results</h2>
 <table><tr>{thead}</tr>{trows}</table>
 <p class=note><code>regressed_queries</code> = queries slower under the current best than with no indexes. It is non-zero on purpose: every real win is a trade-off.</p>
-<p class=sub>POST <code>/live</code> to run a fresh 3-generation search against the live database (takes a few minutes).</p>
+
+<h2>Try it yourself</h2>
+<div class=note>
+<p><a class=btn href="/custom">Run your own SQL →</a> &nbsp; Paste your own read-only queries
+against the TPC-H tables and watch the same search run live, with the schema/dataset shown so you
+know what you can query.</p>
+<p><form method="post" action="/live" style="display:inline;margin:0">
+<button type="submit" class=btn>Run a live search on the TPC-H workload →</button>
+</form> &nbsp; <span class=sub>takes a few minutes — runs a real benchmark and real LLM calls, not
+a replay of the numbers above.</span></p>
+</div>
 """
 
 
-@app.post("/live")
+@app.get("/live")
+def live_get():
+    # /live only runs via the POST form on /replay -- a browser GET here
+    # (e.g. someone navigating to the URL directly) lands back on the page
+    # with the actual button, rather than a bare 405.
+    return RedirectResponse("/replay")
+
+
+@app.post("/live", response_class=HTMLResponse)
 def live():
-    """Run a real 3-generation search and return a measured summary."""
+    """Run a real 3-generation search against the fixed TPC-H workload and
+    render a measured result page (same rendering as /custom's)."""
     try:
         with _run_slot():
             compiled = graph.build_graph()
@@ -240,14 +275,21 @@ def live():
                 )
             graph.flush_traces()
     except BenchmarkBusy as e:
-        return JSONResponse({"error": str(e)}, status_code=429)
-    return {
+        return _custom_error_page([str(e)], status_code=429)
+
+    base_entry = graph._find_config_entry(final, [])
+    best_entry = graph._find_config_entry(final, final["best_config"])
+    result = {
         "baseline_ms": final["baseline_ms"],
         "best_ms": final["best_ms"],
         "percent_faster": round((1 - final["best_ms"] / final["baseline_ms"]) * 100, 1),
         "best_config": final["best_config"],
         "generations_run": final["generation"],
+        "base_pq": base_entry["per_query_ms"] if base_entry else {},
+        "best_pq": best_entry["per_query_ms"] if best_entry else {},
+        "queries_by_id": WORKLOAD,
     }
+    return _custom_result_page(result, cached=False)
 
 
 # --------------------------------------------------------------------------
@@ -274,12 +316,48 @@ def _insights_panel() -> str:
             f"<td>{counts.get(table, 0):,}</td><td style='text-align:left'>{cols}</td></tr>"
         )
     return (
-        "<details><summary><b>TPC-H schema reference</b> — the tables you can query "
+        "<details open><summary><b>Dataset — TPC-H tables you can query</b> "
         "(row counts measured live)</summary>"
         "<table><tr><th>table</th><th>rows</th><th>columns (type)</th></tr>"
         + "".join(rows)
         + "</table></details>"
     )
+
+
+# (label, SQL) — the same examples documented in README's "Example queries for /custom".
+# Each is real, runnable SQL against the tables above; the last is a 3-query
+# workload so the search has to find indexes that help the whole set.
+_EXAMPLE_QUERIES = [
+    ("Selective filter (lineitem)",
+     "SELECT l_orderkey, l_quantity FROM lineitem WHERE l_shipdate = date '1994-03-15';"),
+    ("Compound filter (orders)",
+     "SELECT o_orderkey, o_totalprice FROM orders\n"
+     "WHERE o_orderdate >= date '1995-01-01' AND o_orderstatus = 'O';"),
+    ("Group-by after filter (part)",
+     "SELECT p_brand, count(*) FROM part WHERE p_size = 15 GROUP BY p_brand;"),
+    ("Join (orders × customer)",
+     "SELECT o_orderkey, o_totalprice\n"
+     "FROM orders JOIN customer ON o_custkey = c_custkey\n"
+     "WHERE c_mktsegment = 'AUTOMOBILE' AND o_orderdate < date '1995-03-15';"),
+    ("Multi-query workload (3 queries)",
+     "SELECT l_returnflag, l_linestatus, sum(l_quantity) FROM lineitem "
+     "WHERE l_shipdate <= date '1998-09-01' GROUP BY l_returnflag, l_linestatus;\n"
+     "SELECT o_orderpriority, count(*) FROM orders "
+     "WHERE o_orderdate >= date '1993-07-01' GROUP BY o_orderpriority;\n"
+     "SELECT ps_partkey, min(ps_supplycost) FROM partsupp GROUP BY ps_partkey;"),
+]
+
+
+def _example_buttons() -> str:
+    # json.dumps escapes quotes/newlines for safe embedding in the onclick JS
+    # string literal -- these are fixed, trusted strings, not user input.
+    buttons = "".join(
+        f'<button type="button" class=btn style="font-size:12px;padding:.3rem .6rem;margin:2px 6px 2px 0" '
+        f"onclick=\"document.getElementById('q').value={json.dumps(sql)}\">"
+        f"{html.escape(label)}</button>"
+        for label, sql in _EXAMPLE_QUERIES
+    )
+    return f'<p class=sub>Try an example:</p><p>{buttons}</p>'
 
 
 @app.get("/custom", response_class=HTMLResponse)
@@ -294,12 +372,13 @@ separate multiple queries with <code>;</code>, up to <b>{MAX_CUSTOM_QUERIES}</b>
 Each query is checked against a read-only allowlist and validated with Postgres
 <code>EXPLAIN</code> before anything runs. A run does 3 generations of real
 benchmarking and takes a few minutes.</div>
-<form method="post" action="/custom">
-  <textarea name="queries" rows="14" style="width:100%;font-family:ui-monospace,monospace;font-size:13px"
-    placeholder="Enter your own query, e.g. SELECT l_orderkey, l_quantity FROM lineitem WHERE l_shipdate = date '1994-03-15';"></textarea>
-  <p><button type="submit" style="font-size:15px;padding:.5rem 1.2rem">Run the search</button></p>
-</form>
 {_insights_panel()}
+<form method="post" action="/custom">
+  <textarea id="q" name="queries" rows="14" style="width:100%;font-family:ui-monospace,monospace;font-size:13px"
+    placeholder="Enter your own query, e.g. SELECT l_orderkey, l_quantity FROM lineitem WHERE l_shipdate = date '1994-03-15';"></textarea>
+  {_example_buttons()}
+  <p><button type="submit" class=btn>Run the search</button></p>
+</form>
 <p class=sub><a href="/replay">← back to the full 20-generation replay</a></p>
 """
     return _page("QueryForge — custom", body)
