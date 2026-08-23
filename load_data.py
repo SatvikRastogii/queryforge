@@ -169,10 +169,19 @@ def load_postgres() -> dict[str, int]:
 
 def smoke_test_queries() -> None:
     """Every query must run on Postgres once, now — not fail later inside the
-    oracle. Any error here is fatal and printed verbatim."""
+    oracle. Any error here is fatal and printed verbatim.
+
+    This is a correctness check, not a performance bound: at this point NO
+    indexes exist yet (that's the whole pre-index baseline the project
+    measures against), so a query like Q17/Q20's correlated subquery is
+    genuinely slow, not broken. 300s gives that real headroom on weaker/
+    shared CPU (e.g. Render's free tier) without masking an actually-bad
+    query — a syntax or missing-column error fails almost instantly either
+    way. oracle.py's own 30s TIMEOUT_MS (the real benchmark's timeout,
+    scored as a penalty) is unrelated and untouched by this."""
     failures = []
     with psycopg.connect(AGENT_DSN) as conn:
-        conn.execute("SET statement_timeout = '120s'")
+        conn.execute("SET statement_timeout = '300s'")
         for i in range(1, 23):
             sql = (WORKLOAD_DIR / f"q{i}.sql").read_text(encoding="utf-8").rstrip().rstrip(";")
             try:
