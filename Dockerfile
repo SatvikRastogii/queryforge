@@ -14,6 +14,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # docker-entrypoint-initdb.d convention); reused unchanged here.
 COPY db/init.sql /docker-entrypoint-initdb.d/init.sql
 
+# Unbuffered stdout/stderr: Python fully-buffers when stdout isn't a TTY
+# (always true in a container), so load_data.py's progress prints (data
+# load, the 22-query smoke test) can sit invisible in a buffer for minutes
+# while the process is genuinely still running -- confirmed live: a real
+# deploy's log went silent right after the ANALYZE step and never showed
+# "Starting QueryForge" even though nothing had crashed, just because
+# nothing had flushed yet. This makes real progress visible as it happens.
+ENV PYTHONUNBUFFERED=1
+
 ENV POSTGRES_PASSWORD=postgres
 # Unix socket, not TCP -- see start.sh's listen_addreses='' comment. The
 # empty authority (postgresql://user:pass@/db) plus ?host=<socket dir> is
