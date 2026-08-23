@@ -5,6 +5,13 @@ services:
     dockerfilePath: ./Dockerfile
     plan: free
     envVars:
+      # Pinned explicitly, not left to Render's auto-detection: the image
+      # also has Postgres listening on 5432 (EXPOSE inherited from the
+      # postgres:16 base), which auto-detection can latch onto instead of
+      # the app -- Postgres then logs "invalid length of startup packet"
+      # for every HTTP request Render's proxy forwards to it.
+      - key: PORT
+        value: 7860
       - key: GROQ_API_KEY
         sync: false
       - key: LANGFUSE_PUBLIC_KEY
