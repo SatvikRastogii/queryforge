@@ -10,7 +10,19 @@
 # temporary start.
 set -euo pipefail
 
-docker-entrypoint.sh postgres &
+# -c listen_addresses=localhost: the official image's default is '*' (every
+# interface), meant for other containers on a docker-compose network to
+# reach it. We don't need that -- the app talks to Postgres over localhost
+# in this SAME container -- and leaving it on '*' means Render's external
+# port-scanning/health checks can open real TCP connections to 5432 (it's
+# still EXPOSEd, inherited from the postgres:16 base image), spamming
+# "invalid length of startup packet" and, worse, apparently confusing
+# Render's readiness detection for the whole deploy (confirmed live: a
+# persistent 502 with Render's log still "scanning for open port 7860"
+# minutes in, alongside a constant stream of those Postgres errors).
+# Loopback-only makes 5432 genuinely unreachable from outside the container,
+# not just less discoverable.
+docker-entrypoint.sh postgres -c listen_addresses=localhost &
 
 echo "Waiting for Postgres (queryforge_agent/queryforge) to be ready..."
 until PGPASSWORD=agentpw psql -h localhost -U queryforge_agent -d queryforge -c 'SELECT 1' >/dev/null 2>&1; do
