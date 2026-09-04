@@ -3,7 +3,9 @@ venv/
 __pycache__/
 *.pyc
 data/
-.claude/settings.local.json
+.claude/
+SatvikRastogiResume*.pdf
+CLAUDE.md
 
 # OS / editor cruft
 .DS_Store
