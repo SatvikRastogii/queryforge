@@ -349,11 +349,13 @@ _EXAMPLE_QUERIES = [
 
 
 def _example_buttons() -> str:
-    # json.dumps escapes quotes/newlines for safe embedding in the onclick JS
-    # string literal -- these are fixed, trusted strings, not user input.
+    # json.dumps makes a safe JS string literal, but its own double quotes
+    # then need HTML-attribute escaping too, since onclick="..." is itself
+    # double-quoted -- without html.escape() here, a quote inside the SQL
+    # closes the onclick attribute early and truncates the handler.
     buttons = "".join(
         f'<button type="button" class=btn style="font-size:12px;padding:.3rem .6rem;margin:2px 6px 2px 0" '
-        f"onclick=\"document.getElementById('q').value={json.dumps(sql)}\">"
+        f"onclick=\"document.getElementById('q').value={html.escape(json.dumps(sql))}\">"
         f"{html.escape(label)}</button>"
         for label, sql in _EXAMPLE_QUERIES
     )
