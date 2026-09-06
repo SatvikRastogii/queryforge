@@ -1,13 +1,3 @@
----
-title: QueryForge
-emoji: 🔍
-colorFrom: blue
-colorTo: purple
-sdk: docker
-app_port: 7860
-pinned: false
----
-
 # QueryForge
 
 **LLM-guided search over PostgreSQL index configurations, judged by a real benchmark.**
